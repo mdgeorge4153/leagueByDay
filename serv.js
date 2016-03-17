@@ -1,23 +1,22 @@
-var http = require('http');
-
-
-var lol = require('lol-js').client({
+var Http    = require('http');
+var Promise = require('promise');
+var Ty      = require('then-yield').using(Promise.resolve);
+var Lol     = require('lol-js').client({
   apiKey: fs.readFileSync('api.key').slice(0,-1),
 });
 
-/*
-val getStats = function (region, summName) {
-  return Promise.resolve(null)
-  .then(function (_) {
-    return lol.getSummonersByName('na', [summName]);
-  })
-  .then(function (list) {
-    val summ = list[summName];
-    val id   = summ.id;
-    return lol.matchlist.getMatchListBySummoner(region, id);
-  });
-}
-*/
+
+
+var getStats = Ty.async(function* (region, summName) {
+  var summList = yield Lol.getSummonersByName('na', [summName]);
+  var summ     = summList[summName];
+  var id       = summ.id;
+  var matches  = yield Lol.getMatchlistBySummoner(region, id);
+
+  return matches;
+});
+
+var knot = getStats('na','KnotOfGordium');
 
 /*
 
