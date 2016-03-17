@@ -6,6 +6,10 @@ var LolLib  = require('lol-js');
 var Lol     = LolLib.client({
   apiKey: fs.readFileSync('api.key').slice(0,-1),
   cache:  LolLib.redisCache({host: '127.0.0.1', port: 6380})
+  rateLimit: [
+    {time: 10,  limit: 8},
+    {time: 600, limit: 400},
+  ]
 });
 
 
