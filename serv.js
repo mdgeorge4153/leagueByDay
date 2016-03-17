@@ -1,8 +1,11 @@
 var Http    = require('http');
 var Promise = require('promise');
 var Ty      = require('then-yield');
-var Lol     = require('lol-js').client({
+var LolLib  = require('lol-js');
+
+var Lol     = LolLib.client({
   apiKey: fs.readFileSync('api.key').slice(0,-1),
+  cache:  LolLib.redisCache({host: '127.0.0.1', port: 6380})
 });
 
 
@@ -36,6 +39,7 @@ var getStats = Ty.async(function* (region, summName) {
     }
   }
 
+  var resultsCount = 0;
   for (var i in matches.matches) {
     var match = yield Lol.getMatch(region, matches.matches[i].matchId);
 
@@ -51,8 +55,12 @@ var getStats = Ty.async(function* (region, summName) {
     else
       entry.losses ++;
 
+    resultsCount++;
+
     if (i % 10 == 0)
-      console.log(i + "/" + matches.matches.length);
+      console.log(i + "/" + matches.matches.length + " (" + resultsCount + ")");
+    if (i % 30 == 0)
+      console.log(results);
   }
 
   return results;
