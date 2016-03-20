@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+
+<html>
+  <meta charset="UTF-8">
+  <title>League By Day</title>
+  <script src="http://d3js.org/d3.v3.min.js"  charset="utf-8"></script>
+
+  <style>
+  .axis text {
+    font: 10px sans-serif;
+  }
+  
+  .axis line,
+  .axis path {
+    fill: none;
+    stroke: #000;
+    shape-rendering: crispEdges;
+  }
+
+  .win {
+    fill: steelblue;
+  }
+
+  .loss {
+    fill: brown;
+  }
+  </style>
+
+<body>
+<svg id="chart" />
+
+<script>
+
+var margin = {top: 100, right: 100, bottom: 100, left: 100},
+    width  = 800 - margin.left - margin.right,
+    height = 600 - margin.top  - margin.bottom;
+
+var barwidth  = width / 24;
+var barheight = height / 7;
+
+var formatWeekday = function (d) {
+  var weekdays = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+  return weekdays[d];
+}
+
+var weekdayToY = d3.scale.linear()
+  .domain([-1,7])
+  .range([0,height])
+;
+
+var yAxis = d3.svg.axis()
+  .scale(weekdayToY)
+  .orient("left")
+  .tickFormat(formatWeekday)
+;
+
+var hourToX = d3.scale.linear()
+  .domain([0,24])
+  .range([0,width])
+;
+
+var formatHour = function (d) {
+  if (d == 0 || d == 24)
+    return "midnight";
+  else if (d == 12)
+    return "noon";
+  else
+    return (d % 12) + ":00";
+};
+
+var xAxis = d3.svg.axis()
+  .scale(hourToX)
+  .orient("bottom")
+  .tickFormat(formatHour)
+;
+
+var chart = d3.select("#chart")
+  .attr("width", width + margin.left + margin.right)
+  .attr("height", height + margin.top + margin.bottom)
+;
+
+var area = chart.append("g")
+  .attr("id", "area")
+  .attr("transform", "translate(" + margin.left + "," + margin.top + ")")
+;
+
+area.append("g")
+  .attr("class", "y axis")
+  .call(yAxis)
+;
+
+area.append("g")
+  .attr("class", "x axis")
+  .attr("transform", "translate(0," + height + ")")
+  .call(xAxis)
+  .selectAll("text")
+    .attr("y", 0)
+    .attr("x", -9)
+    .attr("dy", ".35em")
+    .attr("transform", "rotate(-90)")
+    .style("text-anchor", "end")
+;
+
+d3.json("data.json", function(error, input) {
+
+  var data = new Array(24*7);
+  for (var day = 0; day < 7; day++)
+    for (var hour = 0; hour < 24; hour++)
+      data[day*24 + hour] = {day:day, hour:hour, wins: 0, losses: 0};
+
+  for (var i in input) {
+    match = input[i];
+    date  = new Date(match.timestamp);
+    entry = data[date.getDay()*24 + date.getHours()];
+    console.log(entry);
+    if (match.winner)
+      entry.wins++;
+    else
+      entry.losses++;
+  }
+
+  var countToWidth = d3.scale.linear()
+    .domain([0, d3.max(data, function (d) { return d.wins + d.losses; })])
+    .range([0,barwidth/2])
+  ;
+  
+  var percentToHeight = d3.scale.linear()
+    .domain([0,1])
+    .range([0,barheight/2])
+  ;
+  
+  var time = area.selectAll(".time")
+    .data(data)
+    .enter().append("g")
+      .attr("class", "time")
+      .attr("transform", function (d) { return "translate(" + hourToX(d.hour + .5) + "," + weekdayToY(d.day) + ")"; })
+  ;
+  
+  var barPoints = function (wins, losses) {
+    var games = wins + losses;
+    var x = countToWidth(games);
+    var y = percentToHeight(wins/games);
+    return     x + "," + 0
+      + " " +  x + "," + y
+      + " " + -x + "," + y
+      + " " + -x + "," + 0;
+  }
+  
+  time.append("polyline")
+    .attr("class", "win")
+    .attr("transform", "scale(1,-1)")
+    .attr("points", function (d) { return barPoints(d.wins, d.losses); })
+  ;
+  
+  time.append("polyline")
+    .attr("class", "loss")
+    .attr("points", function (d) { return barPoints(d.losses, d.wins); })
+  ;
+
+});
+
+</script>
+
+<!--
+<script>
+var margin = {top: 100, right: 100, bottom: 100, left: 100},
+    width = 960 - margin.left - margin.right,
+    height = 500 - margin.top - margin.bottom;
+
+var x = d3.scale.ordinal()
+    .domain(["apple", "orange", "banana", "grapefruit"])
+    .rangeBands([0, width]);
+
+var xAxis = d3.svg.axis()
+    .scale(x)
+    .orient("bottom");
+
+var svg = d3.select("#chart")
+    .attr("width", width + margin.left + margin.right)
+    .attr("height", height + margin.top + margin.bottom)
+  .append("g")
+    .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+svg.append("g")
+    .attr("class", "x axis")
+    .call(xAxis);
+</script>
+-->
+
+</body>
+
+</html>
