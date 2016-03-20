@@ -112,7 +112,6 @@ d3.json("data.json", function(error, input) {
     match = input[i];
     date  = new Date(match.timestamp);
     entry = data[date.getDay()*24 + date.getHours()];
-    console.log(entry);
     if (match.winner)
       entry.wins++;
     else
