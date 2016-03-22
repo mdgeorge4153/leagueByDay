@@ -6,10 +6,10 @@
   <script src="http://d3js.org/d3.v3.min.js"  charset="utf-8"></script>
 
   <style>
-  .axis text {
+  text {
     font: 10px sans-serif;
   }
-  
+
   .axis line,
   .axis path {
     fill: none;
@@ -33,12 +33,12 @@
     stroke: #000;
   }
 
-  .day .highlight {
+  .day:nth-child(odd) .highlight {
     fill: white;
   }
 
-  .day:hover .highlight {
-    fill: lightyellow;
+  .day:nth-child(even) .highlight {
+    fill: lemonchiffon;
   }
   </style>
 
@@ -158,7 +158,25 @@ d3.json("data.json", function(error, input) {
   
   var percentToHeight = d3.scale.linear()
     .domain([0,1])
-    .range([0,barheight/2])
+    .range([0,barheight/2-5])
+  ;
+
+  legend = area.append("g")
+    .attr("class", "legend")
+    .attr("transform",
+          "translate(" + width + ", " + (weekdayToY(0) - percentToHeight(winPercent)) + ")")
+  ;
+
+  legend.append("line")
+    .attr("class", "average")
+    .attr("x1", 0).attr("y1", 0)
+    .attr("x2", 10).attr("y2", 0)
+  ;
+
+  legend.append("text")
+    .attr("x", 10).attr("y", 0)
+    .attr("dy", ".35em")
+    .text("win rate: " + Math.round(100 * winPercent) + "%")
   ;
   
   var day = area.selectAll(".day")
