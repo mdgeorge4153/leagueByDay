@@ -24,6 +24,22 @@
   .loss {
     fill: brown;
   }
+
+  .average {
+    stroke: #888;
+  }
+
+  .zero {
+    stroke: #000;
+  }
+
+  .day .highlight {
+    fill: white;
+  }
+
+  .day:hover .highlight {
+    fill: lightyellow;
+  }
   </style>
 
 <body>
@@ -36,7 +52,7 @@ var margin = {top: 10, right: 100, bottom: 100, left: 100},
     height = 600 - margin.top  - margin.bottom;
 
 var barwidth  = width / 24;
-var barheight = height / 7;
+var barheight = height / 9;
 
 var formatWeekday = function (d) {
   var weekdays = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
@@ -60,9 +76,9 @@ var hourToX = d3.scale.linear()
 ;
 
 var formatHour = function (d) {
-  if (d == 0 || d == 24)
+  if (d % 24 == 0)
     return "midnight";
-  else if (d == 12)
+  else if (d % 12 == 0)
     return "noon";
   else
     return (d % 12) + ":00";
@@ -103,23 +119,40 @@ area.append("g")
 
 d3.json("data.json", function(error, input) {
 
-  var data = new Array(24*7);
-  for (var day = 0; day < 7; day++)
+  var data = new Array(7);
+  for (var day = 0; day < 7; day++) {
+    data[day] = new Array(24);
     for (var hour = 0; hour < 24; hour++)
-      data[day*24 + hour] = {day:day, hour:hour, wins: 0, losses: 0};
+      data[day][hour] = {day:day, hour:hour, wins: 0, losses: 0};
+  }
 
+  var totalWins = 0, totalLosses = 0;
   for (var i in input) {
     match = input[i];
     date  = new Date(match.timestamp);
-    entry = data[date.getDay()*24 + date.getHours()];
-    if (match.winner)
+    entry = data[date.getDay()][date.getHours()];
+    if (match.winner) {
       entry.wins++;
-    else
+      totalWins++;
+    }
+    else {
       entry.losses++;
+      totalLosses++;
+    }
   }
 
+  var maxGames =
+    d3.max(data, function (row) {
+      return d3.max (row, function (cell) {
+        return cell.wins + cell.losses;
+      })
+    })
+  ;
+
+  var winPercent = totalWins / (totalWins + totalLosses);
+
   var countToWidth = d3.scale.linear()
-    .domain([0, d3.max(data, function (d) { return d.wins + d.losses; })])
+    .domain([0, maxGames])
     .range([0,barwidth/2])
   ;
   
@@ -128,13 +161,45 @@ d3.json("data.json", function(error, input) {
     .range([0,barheight/2])
   ;
   
-  var time = area.selectAll(".time")
+  var day = area.selectAll(".day")
     .data(data)
     .enter().append("g")
-      .attr("class", "time")
-      .attr("transform", function (d) { return "translate(" + hourToX(d.hour + .5) + "," + weekdayToY(d.day) + ")"; })
+      .attr("class", "day")
+      .attr("transform", function (d,i) { return "translate(0," + weekdayToY(i) + ")"; })
   ;
-  
+
+  day.append("rect")
+    .attr("class", "highlight")
+    .attr("x", 0).attr("y", -barheight/2)
+    .attr("width", width).attr("height", barheight)
+  ;
+
+  day.append("line")
+    .attr("class", "average")
+    .attr("x1",     0).attr("y1", -percentToHeight(winPercent))
+    .attr("x2", width).attr("y2", -percentToHeight(winPercent))
+  ;
+
+  day.append("line")
+    .attr("class", "average")
+    .attr("x1",     0).attr("y1", percentToHeight(1-winPercent))
+    .attr("x2", width).attr("y2", percentToHeight(1-winPercent))
+  ;
+
+  day.append("line")
+    .attr("class", "zero")
+    .attr("x1", 0).attr("y1", 0)
+    .attr("x2", width).attr("y2", 0)
+  ;
+
+
+  var time = day.selectAll(".time")
+    .data(function (d) { return d; })
+    .enter().append("g")
+      .attr("class", "time")
+      .attr("transform", function (d,i) { return "translate(" + hourToX(i + .5) + ",0)"; })
+  ;
+
   var barPoints = function (wins, losses) {
     var games = wins + losses;
     var x = countToWidth(games);
