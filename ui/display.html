@@ -38,7 +38,11 @@
   }
 
   .day:nth-child(even) .highlight {
-    fill: lemonchiffon;
+    fill: khaki;
+  }
+
+  .legend polyline {
+    fill: none;
   }
   </style>
 
@@ -47,32 +51,37 @@
 
 <script>
 
-var margin = {top: 10, right: 100, bottom: 100, left: 100},
-    width  = 600 - margin.left - margin.right,
-    height = 600 - margin.top  - margin.bottom;
+var margin = {top: 30, right: 100, bottom: 100, left: 100},
+    width  = 800 - margin.left - margin.right,   /* width  of drawing area */
+    height = 600 - margin.top  - margin.bottom;  /* height of drawing area */
 
-var barwidth  = width / 24;
-var barheight = height / 9;
+var barwidth  = width / 8;
+var barheight = height / 24;
+
+/** setup X axis **************************************************************/
+
+var dayNames = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 
 var formatWeekday = function (d) {
-  var weekdays = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
-  return weekdays[d];
+  return dayNames[d];
 }
 
-var weekdayToY = d3.scale.linear()
-  .domain([-1,7])
-  .range([0,height])
+var weekdayToX = d3.scale.linear()
+  .domain([-.5,6.5])
+  .range([0,width])
 ;
 
-var yAxis = d3.svg.axis()
-  .scale(weekdayToY)
-  .orient("left")
+var xAxis = d3.svg.axis()
+  .scale(weekdayToX)
+  .orient("top")
   .tickFormat(formatWeekday)
 ;
 
-var hourToX = d3.scale.linear()
+/** setup Y axis **************************************************************/
+
+var hourToY = d3.scale.linear()
   .domain([0,24])
-  .range([0,width])
+  .range([0,height])
 ;
 
 var formatHour = function (d) {
@@ -81,23 +90,25 @@ var formatHour = function (d) {
   else if (d % 12 == 0)
     return "noon";
   else
-    return (d % 12) + ":00";
+    return (d % 12) + ":00 " + (d % 24 < 12 ? "am" : "pm");
 };
 
-var xAxis = d3.svg.axis()
-  .scale(hourToX)
-  .orient("bottom")
+var yAxis = d3.svg.axis()
+  .scale(hourToY)
+  .orient("left")
   .tickFormat(formatHour)
 ;
 
+/** setup chart ***************************************************************/
+
 var chart = d3.select("#chart")
-  .attr("width", width + margin.left + margin.right)
-  .attr("height", height + margin.top + margin.bottom)
+  .attr("width",  width  + margin.left + margin.right)
+  .attr("height", height + margin.top  + margin.bottom)
 ;
 
 var area = chart.append("g")
   .attr("id", "area")
-  .attr("transform", "translate(" + margin.left + "," + margin.top + ")")
+  .attr("transform", "translate(" + margin.left + "," + margin.right + ")");
 ;
 
 area.append("g")
@@ -107,18 +118,14 @@ area.append("g")
 
 area.append("g")
   .attr("class", "x axis")
-  .attr("transform", "translate(0," + height + ")")
   .call(xAxis)
-  .selectAll("text")
-    .attr("y", 0)
-    .attr("x", -9)
-    .attr("dy", ".35em")
-    .attr("transform", "rotate(-90)")
-    .style("text-anchor", "end")
 ;
+
+/** Adding data (after load) **************************************************/
 
 d3.json("data.json", function(error, input) {
 
+  /** bucket data */
   var data = new Array(7);
   for (var day = 0; day < 7; day++) {
     data[day] = new Array(24);
@@ -151,91 +158,97 @@ d3.json("data.json", function(error, input) {
 
   var winPercent = totalWins / (totalWins + totalLosses);
 
-  var countToWidth = d3.scale.linear()
+  var countToHeight = d3.scale.linear()
     .domain([0, maxGames])
-    .range([0,barwidth/2])
+    .range([0,barheight/2])
   ;
   
-  var percentToHeight = d3.scale.linear()
+  var percentToWidth = d3.scale.linear()
     .domain([0,1])
-    .range([0,barheight/2-5])
+    .range([0,barwidth/2])
   ;
+
+  /** legend ******************************************************************/
 
   legend = area.append("g")
     .attr("class", "legend")
     .attr("transform",
-          "translate(" + width + ", " + (weekdayToY(0) - percentToHeight(winPercent)) + ")")
+          "translate(" + (weekdayToX(0) + percentToWidth(winPercent)) + ", " + height + ")")
   ;
 
-  legend.append("line")
+  legend.append("polyline")
     .attr("class", "average")
-    .attr("x1", 0).attr("y1", 0)
-    .attr("x2", 10).attr("y2", 0)
+    .attr("points", "0,0 0,20 20,20")
   ;
 
   legend.append("text")
-    .attr("x", 10).attr("y", 0)
+    .attr("x", 20).attr("y", 20)
     .attr("dy", ".35em")
     .text("win rate: " + Math.round(100 * winPercent) + "%")
   ;
-  
+
+  /** column for day **********************************************************/
+
   var day = area.selectAll(".day")
     .data(data)
     .enter().append("g")
       .attr("class", "day")
-      .attr("transform", function (d,i) { return "translate(0," + weekdayToY(i) + ")"; })
+      .attr("transform", function (d,i) { return "translate(" + weekdayToX(i) + ",0)"; })
   ;
 
   day.append("rect")
     .attr("class", "highlight")
-    .attr("x", 0).attr("y", -barheight/2)
-    .attr("width", width).attr("height", barheight)
+    .attr("x", percentToWidth(-1))
+    .attr("y", 0)
+    .attr("width", 2*percentToWidth(1))
+    .attr("height", height)
   ;
 
   day.append("line")
     .attr("class", "average")
-    .attr("x1",     0).attr("y1", -percentToHeight(winPercent))
-    .attr("x2", width).attr("y2", -percentToHeight(winPercent))
+    .attr("y1",      0).attr("x1", percentToWidth(winPercent))
+    .attr("y2", height).attr("x2", percentToWidth(winPercent))
   ;
 
   day.append("line")
     .attr("class", "average")
-    .attr("x1",     0).attr("y1", percentToHeight(1-winPercent))
-    .attr("x2", width).attr("y2", percentToHeight(1-winPercent))
+    .attr("y1",      0).attr("x1", -percentToWidth(1-winPercent))
+    .attr("y2", height).attr("x2", -percentToWidth(1-winPercent))
   ;
 
   day.append("line")
     .attr("class", "zero")
     .attr("x1", 0).attr("y1", 0)
-    .attr("x2", width).attr("y2", 0)
+    .attr("x2", 0).attr("y2", height)
   ;
 
+  /** bar charts for each time slot *******************************************/
 
   var time = day.selectAll(".time")
     .data(function (d) { return d; })
     .enter().append("g")
       .attr("class", "time")
-      .attr("transform", function (d,i) { return "translate(" + hourToX(i + .5) + ",0)"; })
+      .attr("transform", function (d,i) { return "translate(0," + hourToY(i + .5) + ")"; })
   ;
 
   var barPoints = function (wins, losses) {
     var games = wins + losses;
-    var x = countToWidth(games);
-    var y = percentToHeight(wins/games);
-    return     x + "," + 0
-      + " " +  x + "," + y
-      + " " + -x + "," + y
-      + " " + -x + "," + 0;
+    var y = countToHeight(games);
+    var x = percentToWidth(wins/games);
+    return    0 + "," + y
+      + " " + x + "," + y
+      + " " + x + "," + -y
+      + " " + 0 + "," + -y;
   }
   
   time.append("polyline")
     .attr("class", "win")
-    .attr("transform", "scale(1,-1)")
     .attr("points", function (d) { return barPoints(d.wins, d.losses); })
   ;
   
   time.append("polyline")
     .attr("class", "loss")
+    .attr("transform", "scale(-1,1)")
     .attr("points", function (d) { return barPoints(d.losses, d.wins); })
   ;
 
