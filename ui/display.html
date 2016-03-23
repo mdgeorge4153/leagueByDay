@@ -3,7 +3,7 @@
 <html>
   <meta charset="UTF-8">
   <title>League By Day</title>
-  <script src="http://d3js.org/d3.v3.min.js"  charset="utf-8"></script>
+  <script src="d3.v3.min.js" charset="utf-8"></script>
 
   <style>
   text {
@@ -64,11 +64,20 @@ var margin = {top: 30, right: 100, bottom: 100, left: 100},
 var barwidth  = width / 7;
 var barheight = height / 24;
 
+var extraHours = 6;
+
 /** Layers ********************************************************************/
 
 var chart = d3.select("#chart")
   .attr("width",  width  + margin.left + margin.right)
   .attr("height", height + margin.top  + margin.bottom)
+;
+
+var clipPath = chart.append("defs").append("clipPath")
+  .attr("id", "areaClip")
+  .append("rect")
+    .attr("x", 0).attr("y", 0)
+    .attr("width", width).attr("height", height)
 ;
 
 var backgroundLayer = chart.append("g")
@@ -84,6 +93,7 @@ var guideLayer = chart.append("g")
 var dataLayer = chart.append("g")
   .attr("id", "dataLayer")
   .attr("transform", "translate(" + margin.left + "," + margin.top + ")")
+  .attr("clip-path", "url(#areaClip)")
 ;
 
 var eventLayer = chart.append("g")
@@ -147,7 +157,6 @@ backgroundLayer.append("g")
 
 /** guideline *****************************************************************/
 
-
 eventArea = eventLayer.append("rect")
   .attr("x", margin.left).attr("y", margin.top)
   .attr("width", width)
@@ -172,6 +181,7 @@ eventArea
   })
 ;
 
+
 /** Adding data (after load) **************************************************/
 
 d3.json("data.json", function(error, input) {
@@ -179,23 +189,40 @@ d3.json("data.json", function(error, input) {
   /** bucket data */
   var data = new Array(7);
   for (var day = 0; day < 7; day++) {
-    data[day] = new Array(24);
-    for (var hour = 0; hour < 24; hour++)
-      data[day][hour] = {day:day, hour:hour, wins: 0, losses: 0};
+    data[day] = new Array(24 + 2*extraHours);
+    for (var hour = 0 - extraHours; hour < 24 + extraHours; hour++) {
+      data[day][hour + extraHours] = {day:day, hour:hour, wins: 0, losses: 0};
+    }
   }
 
   var totalWins = 0, totalLosses = 0;
   for (var i in input) {
-    match = input[i];
-    date  = new Date(match.timestamp);
-    entry = data[date.getDay()][date.getHours()];
-    if (match.winner) {
-      entry.wins++;
-      totalWins++;
-    }
-    else {
-      entry.losses++;
-      totalLosses++;
+    var match = input[i];
+    var date  = new Date(match.timestamp);
+
+    var day     = date.getDay(), hour = date.getHours();
+    var tmrwDay = (day + 1) % 7, tmrwHour = hour - 24;
+    var ystrDay = (day - 1) % 7, ystrHour = hour + 24;
+
+    if (ystrDay < 0) ystrDay += 7;
+
+    var entries = [data[day][extraHours + hour]];
+
+    if (tmrwHour + extraHours >= 0)
+      entries.push(data[tmrwDay][extraHours + tmrwHour]);
+
+    if (ystrHour + extraHours < data[ystrDay].length)
+      entries.push(data[ystrDay][extraHours + ystrHour]);
+
+    for (var j in entries) {
+      if (match.winner) {
+        entries[j].wins++;
+        totalWins++;
+      }
+      else {
+        entries[j].losses++;
+        totalLosses++;
+      }
     }
   }
 
@@ -240,7 +267,7 @@ d3.json("data.json", function(error, input) {
 
   /** column for day **********************************************************/
 
-  var day = backgroundLayer.selectAll(".day")
+  var day = dataLayer.selectAll(".day")
     .data(data)
     .enter().append("g")
       .attr("class", "day")
@@ -279,7 +306,7 @@ d3.json("data.json", function(error, input) {
     .data(function (d) { return d; })
     .enter().append("g")
       .attr("class", "time")
-      .attr("transform", function (d,i) { return "translate(0," + hourToY(i + .5) + ")"; })
+      .attr("transform", function (d) { return "translate(0," + hourToY(d.hour + .5) + ")"; })
   ;
 
   var barPoints = function (wins, losses) {
