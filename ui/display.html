@@ -44,6 +44,10 @@
   .legend polyline {
     fill: none;
   }
+
+  #guide {
+    stroke: #000;
+  }
   </style>
 
 <body>
@@ -51,12 +55,42 @@
 
 <script>
 
+/** Constants *****************************************************************/
+
 var margin = {top: 30, right: 100, bottom: 100, left: 100},
     width  = 800 - margin.left - margin.right,   /* width  of drawing area */
     height = 600 - margin.top  - margin.bottom;  /* height of drawing area */
 
 var barwidth  = width / 7;
 var barheight = height / 24;
+
+/** Layers ********************************************************************/
+
+var chart = d3.select("#chart")
+  .attr("width",  width  + margin.left + margin.right)
+  .attr("height", height + margin.top  + margin.bottom)
+;
+
+var backgroundLayer = chart.append("g")
+  .attr("id", "background")
+  .attr("transform", "translate(" + margin.left + "," + margin.top + ")")
+;
+
+var guideLayer = chart.append("g")
+  .attr("id", "guide")
+  .attr("transform", "translate(" + margin.left + "," + margin.top + ")")
+;
+
+var dataLayer = chart.append("g")
+  .attr("id", "dataLayer")
+  .attr("transform", "translate(" + margin.left + "," + margin.top + ")")
+;
+
+var eventLayer = chart.append("g")
+  .attr("id", "eventLayer")
+  .attr("pointer-events", "all")
+  .attr("visibility", "hidden")
+;
 
 /** setup X axis **************************************************************/
 
@@ -99,26 +133,43 @@ var yAxis = d3.svg.axis()
   .tickFormat(formatHour)
 ;
 
-/** setup chart ***************************************************************/
+/** Axes **********************************************************************/
 
-var chart = d3.select("#chart")
-  .attr("width",  width  + margin.left + margin.right)
-  .attr("height", height + margin.top  + margin.bottom)
-;
-
-var area = chart.append("g")
-  .attr("id", "area")
-  .attr("transform", "translate(" + margin.left + "," + margin.right + ")");
-;
-
-area.append("g")
+backgroundLayer.append("g")
   .attr("class", "y axis")
   .call(yAxis)
 ;
 
-area.append("g")
+backgroundLayer.append("g")
   .attr("class", "x axis")
   .call(xAxis)
+;
+
+/** guideline *****************************************************************/
+
+
+eventArea = eventLayer.append("rect")
+  .attr("x", margin.left).attr("y", margin.top)
+  .attr("width", width)
+  .attr("height", height)
+;
+
+guide = guideLayer.append("line")
+  .attr("x1",     0).attr("y1", 0)
+  .attr("x2", width).attr("y2", 0)
+;
+
+eventArea
+  .on('mouseover', function () {
+    guide.attr("visibility", "visible");
+  })
+  .on('mousemove', function () {
+    var y = d3.mouse(guideLayer.node())[1];
+    guide.attr("transform", "translate(" + 0 + "," + y + ")");
+  })
+  .on('mouseout',  function () {
+    guide.attr("visibility", "hidden");
+  })
 ;
 
 /** Adding data (after load) **************************************************/
@@ -170,7 +221,7 @@ d3.json("data.json", function(error, input) {
 
   /** legend ******************************************************************/
 
-  legend = area.append("g")
+  legend = backgroundLayer.append("g")
     .attr("class", "legend")
     .attr("transform",
           "translate(" + (weekdayToX(0) + percentToWidth(winPercent)) + ", " + height + ")")
@@ -189,7 +240,7 @@ d3.json("data.json", function(error, input) {
 
   /** column for day **********************************************************/
 
-  var day = area.selectAll(".day")
+  var day = backgroundLayer.selectAll(".day")
     .data(data)
     .enter().append("g")
       .attr("class", "day")
