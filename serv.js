@@ -51,6 +51,11 @@ var getStats = Ty.async(function* (region, summName) {
 });
 
 var knot = getStats('na','KnotOfGordium');
+ 
+knot.then(function (stats) {
+  fs.writeFileSync('ui/data.json', JSON.stringify(stats, null, 2));
+  console.log(stats);
+});
 
 /*
 
