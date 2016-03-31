@@ -135,7 +135,7 @@ function formatHour (hour) {
 
 /** Parsing / classifying data ************************************************/
 
-var minHour = -3, maxHour = 30;
+var minHour = -5, maxHour = 33;
 
 /**
  * Classify raw game data by day and time
@@ -219,6 +219,7 @@ function leagueByDayChart() {
 		if (arguments.length == 0)
 			return margin;
 		margin = arg;
+		rescale();
 		return this;
 	}
 
@@ -226,6 +227,7 @@ function leagueByDayChart() {
 		if (arguments.length == 0)
 			return totalWidth;
 		totalWidth = arg;
+		rescale();
 		return this;
 	}
 
@@ -233,6 +235,7 @@ function leagueByDayChart() {
 		if (arguments.length == 0)
 			return totalHeight;
 		totalHeight = arg;
+		rescale();
 		return this;
 	}
 
@@ -240,6 +243,7 @@ function leagueByDayChart() {
 		if (arguments.length == 0)
 			return minHour;
 		minHour = arg;
+		rescale();
 		return this;
 	}
 
@@ -247,6 +251,7 @@ function leagueByDayChart() {
 		if (arguments.length == 0)
 			return maxHour;
 		maxHour = arg;
+		rescale();
 		return this;
 	}
 
@@ -254,6 +259,7 @@ function leagueByDayChart() {
 		if (arguments.length == 0)
 			return maxGamesPerDay;
 		maxGamesPerDay = arg;
+		rescale();
 		return this;
 	}
 
@@ -261,16 +267,32 @@ function leagueByDayChart() {
 		if (arguments.length == 0)
 			return winPercent;
 		winPercent = arg;
+		rescale();
 		return this;
 	}
 
 	/** Computed values *******************************************************/
 	
 	var width, height, barwidth, barheight,
-	    weekdayToX, xAxis,
-	    hourToY, yAxis,
-	    percentToWidth, countToHeight;
-	
+	    weekdayToX     = d3.scale.linear().domain([-.5,6.5]),
+	    hourToY        = d3.scale.linear().domain([0,24]),
+	    percentToWidth = d3.scale.linear().domain([0,1]),
+		countToHeight  = d3.scale.linear(),
+		zoom = d3.behavior.zoom().scaleExtent([1,1])
+	;
+
+	var xAxis = d3.svg.axis()
+		.scale(weekdayToX)
+		.orient("top")
+		.tickFormat(formatWeekday)
+	;
+
+	var yAxis = d3.svg.axis()
+		.scale(hourToY)
+		.orient("left")
+		.tickFormat(formatHour)
+	;
+
 	function rescale() {
 		width  = totalWidth  - margin.left - margin.right,
 		height = totalHeight - margin.top  - margin.bottom;
@@ -278,47 +300,26 @@ function leagueByDayChart() {
 		barwidth  = width / 7,
 		barheight = height / 24;
 
-		weekdayToX = d3.scale.linear()
-			.domain([-.5,6.5])
-			.range([0,width])
-		;
+		weekdayToX.range([0,width]);
+
+		hourToY.range([0,height]);
 		
-		xAxis = d3.svg.axis()
-			.scale(weekdayToX)
-			.orient("top")
-			.tickFormat(formatWeekday)
-		;
-		
-		hourToY = d3.scale.linear()
-			.domain([0,24])
-			.range([0,height])
-		;
-		
-		yAxis = d3.svg.axis()
-			.scale(hourToY)
-			.orient("left")
-			.tickFormat(formatHour)
-		;
-		
-		percentToWidth = d3.scale.linear()
-			.domain([0,1])
-			.range([0,barwidth/2])
-		;
-		
-		countToHeight = d3.scale.linear()
-			.domain([0, maxGamesPerDay])
-			.range([0,barheight/2])
-		;
+		percentToWidth.range([0,barwidth/2]);
+
+		countToHeight.domain([0, maxGamesPerDay]).range([0,barheight/2]);
+
+		zoom.y(hourToY);
 	}
+
+	rescale();
 
 	function getYScale() {
 		return hourToY;
 	}
 
-	/** Rendering chart SVG *******************************************************/
+	/** Rendering chart SVG ***************************************************/
 	
 	function createChart(selection) {
-		rescale();
 
 		var update = selection.selectAll("svg")
 			.data([selection.datum()]);
@@ -366,12 +367,17 @@ function leagueByDayChart() {
 		/** create / configure data area */
 	
 		enter.append("g")
-			.attr("class", "data")
+			.attr("class", "viewport")
 			.attr("clip-path", "url(#areaClip)")
+			.append("g")
+				.attr("class", "data")
+		;
+
+		update.select("g.viewport")
+			.attr("transform", "translate(" + margin.left + "," + margin.top + ")")
 		;
 	
 		update.select("g.data")
-			.attr("transform", "translate(" + margin.left + "," + margin.top + ")")
 			.selectAll(".day")
 				.data(function (datum) { return datum; })
 				.call(createDay)
@@ -400,6 +406,26 @@ function leagueByDayChart() {
 				.selectAll("text")
 				.text("win rate: " + Math.round(100 * winPercent) + "%")
 		;
+
+		/** Setup zoom ********************************************************/
+		var minTranslate = hourToY(24 - maxHour);
+		var maxTranslate = hourToY(0  - minHour);
+		zoom.on('zoom', function () {
+			var t = zoom.translate(),
+			    tx = t[0], ty = t[1];
+
+			ty = Math.min(ty, maxTranslate);
+			ty = Math.max(ty, minTranslate);
+
+			zoom.translate([tx,ty]);
+
+			update.select("g.y.axis").call(yAxis);
+
+			update.select(".data")
+				.attr("transform", "translate(0," + hourToY(0) + ")")
+			;
+		});
+		update.call(zoom);
 	}
 	
 	/** Per-day objects ***********************************************************/
@@ -537,19 +563,6 @@ var chart     = leagueByDayChart();
 var selection = d3.select("#chart")
 
 selection.datum([]).call(chart);
-
-// var zoom = d3.behavior.zoom()
-// 	.y(chart.yscale)
-// 	.scaleExtent([1,1])
-// 	.on('zoom', function () {
-// 		selection.call(chart);
-// 	})
-// ;
-// 
-// selection.select('svg')
-// 	.attr('cursor', 'move')
-// 	.call(zoom)
-// ;
 
 function update(games) {
 	var summary    = summarize(games);
