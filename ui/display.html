@@ -70,6 +70,11 @@
 		fill: khaki;
 	}
 
+	.highlight {
+		fill: green;
+		opacity: 0;
+	}
+
 	div#controls {
 		margin: auto;
 		width: 800px;
@@ -408,18 +413,20 @@ function leagueByDayChart() {
 	
 		/** create / configure data area */
 	
-		enter.append("g")
+		var viewportEnter = enter.append("g")
 			.attr("class", "viewport")
 			.attr("clip-path", "url(#areaClip)")
-			.append("g")
-				.attr("class", "data")
 		;
 
-		update.select("g.viewport")
+		var viewport = update.select("g.viewport")
 			.attr("transform", "translate(" + margin.left + "," + margin.top + ")")
 		;
 	
-		update.select("g.data")
+		viewportEnter.append("g")
+			.attr("class", "data")
+		;
+
+		viewport.select("g.data")
 			.selectAll(".day")
 				.data(function (datum) { return datum; })
 				.call(createDay)
@@ -445,7 +452,7 @@ function leagueByDayChart() {
 		update.select("g.legend")
 			.attr("visibility", winPercent == null ? "hidden" : "visible")
 			.attr("transform", "translate(" + legendX + "," + legendY + ")")
-				.selectAll("text")
+				.select("text")
 				.text("win rate: " + Math.round(100 * winPercent) + "%")
 		;
 
@@ -486,6 +493,75 @@ function leagueByDayChart() {
 			.text("Loading: " + Math.floor(loadPercent * 100) + "%")
 			.attr("visibility", loadPercent < 1 ? "visible" : "hidden")
 		;
+
+		/** highlights ********************************************************/
+
+		var dayHighlights = viewport.selectAll(".day.highlight")
+			.data(dayNames)
+		;
+
+		dayHighlights.enter().append("rect")
+			.attr("class", "day highlight")
+			.attr("height", 4)
+			.attr("y", 0)
+		;
+
+		dayHighlights
+			.attr("width", weekdayToX(1) - weekdayToX(0))
+			.attr("x", function (d,i) { return weekdayToX(i - 0.5); })
+		;
+
+		var hours = Array.apply(null, Array(maxHour - minHour))
+			.map(function (d,i) { return i + minHour; })
+		;
+
+		var hourHighlights = viewport.select(".data").selectAll(".hour.highlight")
+			.data(hours)
+		;
+
+		hourHighlights.enter().append("rect")
+			.attr("class", "hour highlight")
+			.attr("width", 4)
+			.attr("x", 0)
+		;
+
+		hourHighlights
+			.attr("height", hourToY(1) - hourToY(0))
+			.attr("y", function (d,i) { return hourToY(d); })
+		;
+
+		var updateHighlight = function () {
+			var viewport = d3.select(this);
+			var data     = viewport.select(".data");
+
+			var pos  = d3.mouse(viewport.node());
+			var day  = Math.round(weekdayToX.invert(pos[0]));
+			var hour = Math.floor(hourToY.invert(pos[1]));
+
+			var hourHighlights = data.selectAll('.hour.highlight');
+
+			hourHighlights
+				.style('opacity', 0)
+			;
+
+			hourHighlights.filter(function (d,i) { return d == hour; })
+				.style('opacity', 1)
+			;
+
+			var dayHighlights = viewport.selectAll('.day.highlight');
+
+			dayHighlights.style('opacity', 0);
+
+			dayHighlights.filter(function (d,i) {
+				return i == day;
+			})
+				.style('opacity', 1)
+			;
+		};
+
+		viewportEnter.on('mouseout', updateHighlight);
+		viewportEnter.on('mousemove', updateHighlight);
+		viewportEnter.on('mouseenter', updateHighlight);
 	}
 	
 	/** Per-day objects *******************************************************/
@@ -557,6 +633,7 @@ function leagueByDayChart() {
 			.data(function (datum) { return datum; })
 			.call(createHour)
 		;
+
 	}
 	
 	/** Per-hour objects **********************************************************/
