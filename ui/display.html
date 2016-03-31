@@ -10,6 +10,11 @@
 		font: 10px sans-serif;
 	}
 
+	text.loading {
+		font-size: 20px;
+		text-anchor: middle;
+	}
+
 	.axis line,
 	.axis path {
 		fill: none;
@@ -100,6 +105,7 @@ type dayEntry  = Array<hourEntry>
 
 type summary = {
   winPercent:     float x or null,   0 ≤ x ≤ 1
+  loadPercent:    float              0 ≤ x ≤ 1
   maxGamesPerDay: int
   days:           Array<dayEntry>    length = 7
 }
@@ -145,6 +151,7 @@ var minHour = -5, maxHour = 33;
 function summarize (games) {
 	var result = {
 		winPercent: null,
+		loadPercent: 0,
 		maxGamesPerDay: 0,
 		days: new Array(7),
 	}
@@ -155,11 +162,11 @@ function summarize (games) {
 	for (var day = 0; day < 7; day++) {
 		result.days[day] = new Array(size);
 		for (var hour = minHour; hour < maxHour; hour++) {
-			result.days[day][hour + offset] = {day:day, hour:hour, wins: 0, losses: 0};
+			result.days[day][hour + offset] = {day:day, hour:hour, wins: 0, losses: 0, missing: 0};
 		}
 	}
 	
-	var totalWins = 0, totalLosses = 0;
+	var totalWins = 0, totalLosses = 0, totalMissing = 0;
 	for (var i in games) {
 		var match = games[i];
 		var date  = new Date(match.timestamp);
@@ -177,13 +184,17 @@ function summarize (games) {
 			entries.push(result.days[ystrDay][ystrHour + offset]);
 	
 		for (var j in entries) {
-			if (match.winner) {
+			if (match.winner == true) {
 				entries[j].wins++;
 				totalWins++;
 			}
-			else {
+			else if (match.winner == false) {
 				entries[j].losses++;
 				totalLosses++;
+			}
+			else {
+				entries[j].missing++;
+				totalMissing++;
 			}
 		}
 	}
@@ -191,13 +202,15 @@ function summarize (games) {
 	result.maxGamesPerDay =
 		d3.max(result.days, function (day) {
 			return d3.max (day, function (hour) {
-				return hour.wins + hour.losses;
+				return hour.wins + hour.losses + hour.missing;
 			})
 		})
 	;
 
-	if (result.maxGamesPerDay > 0)
-		result.winPercent = totalWins / (totalWins + totalLosses);
+	if (result.maxGamesPerDay > 0) {
+		result.winPercent  = totalWins / (totalWins + totalLosses);
+		result.loadPercent = (totalWins + totalLosses) / (totalWins + totalLosses + totalMissing);
+	}
 
 	return result;
 }
@@ -212,6 +225,7 @@ function leagueByDayChart() {
 
 	var maxGamesPerDay = null;
 	var winPercent     = null;
+	var loadPercent    = 0;
 
 	/** Setters / getters *****************************************************/
 
@@ -243,7 +257,6 @@ function leagueByDayChart() {
 		if (arguments.length == 0)
 			return minHour;
 		minHour = arg;
-		rescale();
 		return this;
 	}
 
@@ -251,7 +264,6 @@ function leagueByDayChart() {
 		if (arguments.length == 0)
 			return maxHour;
 		maxHour = arg;
-		rescale();
 		return this;
 	}
 
@@ -267,7 +279,13 @@ function leagueByDayChart() {
 		if (arguments.length == 0)
 			return winPercent;
 		winPercent = arg;
-		rescale();
+		return this;
+	}
+
+	function setLoadPercent (arg) {
+		if (arguments.length == 0)
+			return loadPercent;
+		loadPercent = arg;
 		return this;
 	}
 
@@ -312,10 +330,6 @@ function leagueByDayChart() {
 	}
 
 	rescale();
-
-	function getYScale() {
-		return hourToY;
-	}
 
 	/** Rendering chart SVG ***************************************************/
 	
@@ -408,8 +422,10 @@ function leagueByDayChart() {
 		;
 
 		/** Setup zoom ********************************************************/
+
 		var minTranslate = hourToY(24 - maxHour);
 		var maxTranslate = hourToY(0  - minHour);
+
 		zoom.on('zoom', function () {
 			var t = zoom.translate(),
 			    tx = t[0], ty = t[1];
@@ -425,10 +441,26 @@ function leagueByDayChart() {
 				.attr("transform", "translate(0," + hourToY(0) + ")")
 			;
 		});
-		update.call(zoom);
+
+		enter.call(zoom);
+		enter.attr('cursor', 'move');
+
+		/** Load percentage ***************************************************/
+
+		enter.append("text")
+			.attr("class", "loading")
+			.attr("dy", "1em")
+		;
+
+		update.select("text.loading")
+			.attr("x", margin.left + width / 2 )
+			.attr("y", margin.top  + height)
+			.text("Loading: " + Math.floor(loadPercent * 100) + "%")
+			.attr("visibility", loadPercent < 1 ? "visible" : "hidden")
+		;
 	}
 	
-	/** Per-day objects ***********************************************************/
+	/** Per-day objects *******************************************************/
 	
 	function createDay(update) {
 		var enter = update.enter();
@@ -554,7 +586,7 @@ function leagueByDayChart() {
 	chart.maxHour        = setMaxHour;
 	chart.maxGamesPerDay = setMaxGamesPerDay;
 	chart.winPercent     = setWinPercent;
-	chart.yscale         = getYScale;
+	chart.loadPercent    = setLoadPercent;
 
 	return chart;
 }
@@ -569,6 +601,7 @@ function update(games) {
 	chart
 		.maxGamesPerDay(summary.maxGamesPerDay)
 		.winPercent(summary.winPercent)
+		.loadPercent(summary.loadPercent)
 	;
 
 	d3.select("#chart")
@@ -577,9 +610,7 @@ function update(games) {
 	;
 }
 
-var t = new Date ('3/27/2016 4:00 am').getTime();
-
-update([{timestamp: t, winner: true}]);
+update([]);
 
 d3.json("data.json", function(error, input) {
 	update(input);
