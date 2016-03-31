@@ -478,7 +478,6 @@ function leagueByDayChart() {
 		});
 
 		enter.call(zoom);
-		enter.attr('cursor', 'move');
 
 		/** Load percentage ***************************************************/
 
@@ -559,9 +558,12 @@ function leagueByDayChart() {
 			;
 		};
 
-		viewportEnter.on('mouseout', updateHighlight);
 		viewportEnter.on('mousemove', updateHighlight);
 		viewportEnter.on('mouseenter', updateHighlight);
+
+		viewportEnter.on('mouseout', function () {
+			d3.select(this).selectAll('.highlight').style('opacity', 0);
+		});
 	}
 	
 	/** Per-day objects *******************************************************/
@@ -718,32 +720,6 @@ update([]);
 d3.json("data.json" + document.location.search, function(error, input) {
 	update(input);
 });
-
-// /** guideline *****************************************************************/
-// 
-// eventArea = eventLayer.append("rect")
-// 	.attr("x", margin.left).attr("y", margin.top)
-// 	.attr("width", width)
-// 	.attr("height", height)
-// ;
-// 
-// guide = guideLayer.append("line")
-// 	.attr("x1",			0).attr("y1", 0)
-// 	.attr("x2", width).attr("y2", 0)
-// ;
-// 
-// eventArea
-// 	.on('mouseover', function () {
-// 		guide.attr("visibility", "visible");
-// 	})
-// 	.on('mousemove', function () {
-// 		var y = d3.mouse(guideLayer.node())[1];
-// 		guide.attr("transform", "translate(" + 0 + "," + y + ")");
-// 	})
-// 	.on('mouseout',  function () {
-// 		guide.attr("visibility", "hidden");
-// 	})
-// ;
 
 </script>
 
