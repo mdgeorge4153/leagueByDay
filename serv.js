@@ -2,8 +2,18 @@ var Http    = require('http');
 var Promise = require('promise');
 var Ty      = require('then-yield');
 var LolLib  = require('lol-js');
+var Url     = require('url');
+var Fs      = require('fs');
 
-var config   = JSON.parse(fs.readFileSync('config.json'));
+/** config.json should have the following type:
+{
+	apiKey:    string
+	rateLimit: Array<{time: int, limit: int}>
+	cache:     {type: string, other params depending on type}
+	port:      int
+}
+*/
+var config   = JSON.parse(Fs.readFileSync('config.json'));
 
 switch(config.cache.type) {
 	case "redis":
@@ -32,14 +42,21 @@ var getParticipant = function (match, summId) {
 }
 
 var getStats = Ty.async(function* (region, summName) {
-	var summList = yield Lol.getSummonersByName('na', [summName]);
-	var summId	 = summList[summName].id;
-	var matches  = yield Lol.getMatchlistBySummoner(region, summId);
 
+	console.log('fetching summoner id for ' + summName + ' [' + region + ']');
+	var summList = yield Lol.getSummonersByName(region, [summName]);
+	var summId	 = summList[summName].id;
+
+	console.log('fetching match list  for ' + summId);
+	var matches  = yield Lol.getMatchlistBySummoner(region, summId);
+	console.log(matches);
+
+	console.log('fetching details for ' + /* matches.matches.length + */ 'matches');
 	var results = new Array(matches.matches.length);
 
 	for (var i in matches.matches) {
 		var match = matches.matches[i];
+		console.log('fetching match ' + i + '/' + matches.matches.length);
 		var matchDetail = yield Lol.getMatch(region, match.matchId);
 
 		results[i] = {
@@ -56,22 +73,73 @@ var getStats = Ty.async(function* (region, summName) {
 	return results;
 });
 
-var knot = getStats('na','KnotOfGordium');
- 
-knot.then(function (stats) {
-	fs.writeFileSync('ui/data.json', JSON.stringify(stats, null, 2));
-	console.log(stats);
+var resources = {
+	'/display.html': {
+		contentType: 'text/html',
+		content: Fs.readFileSync('ui/display.html'),
+	},
+	'/d3.v3.min.js': {
+		contentType: 'application/javascript',
+		content: Fs.readFileSync('ui/d3.v3.min.js'),
+	},
+}
+
+
+var server = Http.createServer(function (request, response) {
+
+	if (request.method != 'GET') {
+		response.writeHead(405);
+		response.end();
+		return;
+	}
+
+	var url = Url.parse(request.url, true);
+
+	switch(url.pathname) {
+		case '/':
+			response.writeHead(300, {
+				'Location': '/display.html'
+			});
+			response.end();
+			break;
+
+		case '/display.html':
+		case '/d3.v3.min.js':
+			var result = resources[url.pathname]
+			response.writeHead(200, {
+				'Content-Length': result.content.length,
+				'Content-Type':   result.contentType,
+			});
+			response.end(result.content);
+			break;
+
+		case '/data.json':
+			var summoner = url.query['summoner'];
+			var region   = url.query['region'].toLowerCase();
+
+			if (summoner == undefined || region == undefined) {
+				response.writeHead(400);
+				response.end('summoner and region are required');
+			}
+
+			console.log('getting stats for ' + summoner + ' [' + region + ']');
+			getStats(region, summoner)
+			.then(function (stats) {
+				response.writeHead(200, {
+					'Content-Type': 'application/json'
+				});
+				response.end(JSON.stringify(stats));
+			});
+
+			break;
+
+		default:
+			response.writeHead(404);
+			break;
+	}
 });
 
-/*
-
-var server = http.createServer(function (req, resp) {
-	resp.writeHead(200);
-	resp.end('Hello world')
-});
-
-server.listen(8080)
-*/
+server.listen(config.port)
 
 /*
 ** vim: ts=4 sw=4
