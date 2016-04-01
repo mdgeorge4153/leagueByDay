@@ -3,15 +3,21 @@ var Promise = require('promise');
 var Ty      = require('then-yield');
 var LolLib  = require('lol-js');
 
-var Lol = LolLib.client({
-	apiKey: fs.readFileSync('api.key').slice(0,-1),
-	cache:  LolLib.redisCache({host: '127.0.0.1', port: 6380}),
-	rateLimit: [
-		{time: 10,  limit: 8},
-		{time: 600, limit: 400},
-	],
-});
+var config   = JSON.parse(fs.readFileSync('config.json'));
 
+switch(config.cache.type) {
+	case "redis":
+		config.cache = LolLib.redisCache(config.cache);
+		break;
+	case "lru":
+		config.cache = LolLib.lruCache(config.cache);
+		break;
+	case "none":
+		config.cache = null;
+		break;
+}
+
+var Lol = LolLib.client(config);
 
 var getParticipant = function (match, summId) {
 	pId = match.participantIdentities.find (function (participantIdentity) {
