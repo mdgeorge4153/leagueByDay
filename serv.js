@@ -41,6 +41,12 @@ var getParticipant = function (match, summId) {
 	return participant;
 }
 
+function delay(time) {
+	return new Promise (function (fulfill) {
+		setTimeout(fulfill, time);
+	});
+}
+
 var getStats = Ty.async(function* (region, summName) {
 
 	console.log('fetching summoner id for ' + summName + ' [' + region + ']');
@@ -49,28 +55,48 @@ var getStats = Ty.async(function* (region, summName) {
 
 	console.log('fetching match list  for ' + summId);
 	var matches  = yield Lol.getMatchlistBySummoner(region, summId);
-	console.log(matches);
 
 	console.log('fetching details for ' + /* matches.matches.length + */ 'matches');
+	var timeout = new Promise(function (fulfill) { setTimeout(fulfill, 1000); });
 	var results = new Array(matches.matches.length);
-
 	for (var i in matches.matches) {
 		var match = matches.matches[i];
-		console.log('fetching match ' + i + '/' + matches.matches.length);
-		var matchDetail = yield Lol.getMatch(region, match.matchId);
 
-		results[i] = {
-			id:        match.matchId,
-			champion:  match.champion,
-			queue:     match.queue,
-			lane:      match.lane,
-			role:      match.role,
-			timestamp: match.timestamp,
-			winner:    getParticipant(matchDetail, summId).stats.winner,
-		};
+		function makeResult(match, summId) {
+			var result = {
+				id:        match.matchId,
+				champion:  match.champion,
+				queue:     match.queue,
+				lane:      match.lane,
+				role:      match.role,
+				timestamp: match.timestamp,
+			};
+
+			result.addDetail = function (matchDetail) {
+				console.log('match ' + matchDetail.matchId + ' =? ' + result.id + ' fetched');
+				result.winner = getParticipant(matchDetail, summId).stats.winner;
+				return result;
+			};
+
+			result.timeout = function () {
+				if (result.winner == undefined)
+					result.winner = null;
+				return result;
+			};
+
+			return result;
+		}
+
+		console.log('setting up race ' + i);
+		result = makeResult(match, summId);
+
+		results[i] = Promise.race([
+			Lol.getMatch(region, match.matchId).then(result.addDetail),
+			timeout.then(result.timeout)
+		]);
 	}
 
-	return results;
+	return Promise.all(results);
 });
 
 var resources = {
