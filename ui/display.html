@@ -718,14 +718,11 @@ function update(games) {
 }
 
 function load () {
-	if (document.location.search == "")
-		return;
-
 	d3.json("data.json" + document.location.search, function(error, input) {
 		var loadPercent = update(input);
 
-		if (loadPercent < 1)
-			setTimeout(load, 2000);
+		// if (loadPercent < 1)
+		// 	setTimeout(load, 2000);
 	});
 }
 
