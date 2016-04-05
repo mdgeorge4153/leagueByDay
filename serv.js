@@ -7,12 +7,13 @@ var Fs      = require('fs');
 
 /** config.json should have the following type:
 {
-	apiKey:    string
-	rateLimit: Array<{time: int, limit: int}>
-	cache:     {type: string, other params depending on type}
-	port:      int
+	apiKey:    string                           key for riot API
+	rateLimit: Array<{time: int, limit: int}>   See lol-js docs
+	cache:     {type: string, other params}     See lol-js docs for other params
+	port:      int                              local port number for web server
 }
 */
+
 var config   = JSON.parse(Fs.readFileSync('config.json'));
 
 switch(config.cache.type) {
@@ -29,6 +30,11 @@ switch(config.cache.type) {
 
 var Lol = LolLib.client(config);
 
+
+/******************************************************************************/
+/** Pulling data from Lol api *************************************************/
+/******************************************************************************/
+
 var getParticipant = function (match, summId) {
 	pId = match.participantIdentities.find (function (participantIdentity) {
 		return participantIdentity.player.summonerId = summId;
@@ -41,39 +47,30 @@ var getParticipant = function (match, summId) {
 	return participant;
 }
 
-function delay(time) {
-	return new Promise (function (fulfill) {
-		setTimeout(fulfill, time);
-	});
-}
-
 var getStats = Ty.async(function* (region, summName) {
 
-	console.log('fetching summoner id for ' + summName + ' [' + region + ']');
+	/* find summoner info */
 	var summList = yield Lol.getSummonersByName(region, [summName]);
 	var summId	 = summList[summName].id;
-
-	console.log('fetching match list  for ' + summId);
 	var matches  = yield Lol.getMatchlistBySummoner(region, summId);
 
-	console.log('fetching details for ' + /* matches.matches.length + */ 'matches');
+	/* fetch results for all the matches */
 	var timeout = new Promise(function (fulfill) { setTimeout(fulfill, 1000); });
 	var results = new Array(matches.matches.length);
 	for (var i in matches.matches) {
 		var match = matches.matches[i];
 
+		/* note we need an extra function here to give a scope for the local
+		 * variables; otherwise references to them get captured in the closures
+		 */
 		function makeResult(match, summId) {
 			var result = {
 				id:        match.matchId,
-				champion:  match.champion,
-				queue:     match.queue,
-				lane:      match.lane,
-				role:      match.role,
 				timestamp: match.timestamp,
 			};
 
 			result.addDetail = function (matchDetail) {
-				console.log('match ' + matchDetail.matchId + ' =? ' + result.id + ' fetched');
+				console.log('detail for ' + matchDetail.matchId);
 				result.winner = getParticipant(matchDetail, summId).stats.winner;
 				return result;
 			};
@@ -87,7 +84,6 @@ var getStats = Ty.async(function* (region, summName) {
 			return result;
 		}
 
-		console.log('setting up race ' + i);
 		result = makeResult(match, summId);
 
 		results[i] = Promise.race([
@@ -98,6 +94,11 @@ var getStats = Ty.async(function* (region, summName) {
 
 	return Promise.all(results);
 });
+
+
+/******************************************************************************/
+/** Web server ****************************************************************/
+/******************************************************************************/
 
 var resources = {
 	'/display.html': {
